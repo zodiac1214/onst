@@ -407,6 +407,27 @@
             padding: 2rem;
         }
         
+        /* Update Notification Badge */
+        .update-badge {
+            position: absolute;
+            top: 5px;
+            left: 10px;
+            background: #dc3545;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 10px;
+            z-index: 15;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+        
         /* Modal Styles */
         .modal {
             display: none;
@@ -6899,6 +6920,96 @@
             localStorage.setItem('trout-favorites', JSON.stringify(favorites));
         }
         
+        function getLastVisit() {
+            const lastVisit = localStorage.getItem('trout-last-visit');
+            return lastVisit ? new Date(lastVisit) : new Date(0);
+        }
+        
+        function saveLastVisit() {
+            localStorage.setItem('trout-last-visit', new Date().toISOString());
+        }
+        
+        function getFavoriteData() {
+            const data = localStorage.getItem('trout-favorite-data');
+            return data ? JSON.parse(data) : {};
+        }
+        
+        function saveFavoriteData(data) {
+            localStorage.setItem('trout-favorite-data', JSON.stringify(data));
+        }
+        
+        function checkForUpdates() {
+            const favorites = getFavorites();
+            const lastVisit = getLastVisit();
+            const storedData = getFavoriteData();
+            const currentData = {};
+            
+            let hasUpdates = false;
+            
+            // Collect current data for all favorite locations
+            favorites.forEach(locationKey => {
+                const card = document.querySelector(`[data-location-name][data-location-district]`);
+                if (card) {
+                    const cards = document.querySelectorAll('.location-card');
+                    for (const c of cards) {
+                        const name = c.getAttribute('data-location-name');
+                        const district = c.getAttribute('data-location-district');
+                        const key = `${name}-${district}`;
+                        
+                        if (key === locationKey) {
+                            const fishCount = c.getAttribute('data-location-fish-count');
+                            const totalFish = c.getAttribute('data-location-total-fish');
+                            const year = c.getAttribute('data-location-year');
+                            
+                            currentData[key] = {
+                                fishCount: parseInt(fishCount),
+                                totalFish: parseInt(totalFish),
+                                year: parseInt(year),
+                                lastUpdated: new Date().toISOString()
+                            };
+                            
+                            // Check if data has changed since last visit
+                            const stored = storedData[key];
+                            if (stored && (
+                                stored.fishCount !== currentData[key].fishCount ||
+                                stored.totalFish !== currentData[key].totalFish ||
+                                stored.year !== currentData[key].year
+                            )) {
+                                hasUpdates = true;
+                                showUpdateNotification(c, name);
+                            }
+                            break;
+                        }
+                    }
+                }
+            });
+            
+            // Save current data
+            saveFavoriteData(currentData);
+            
+            return hasUpdates;
+        }
+        
+        function showUpdateNotification(card, locationName) {
+            // Add update badge to the card
+            const header = card.querySelector('.card-header');
+            let badge = header.querySelector('.update-badge');
+            
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.className = 'update-badge';
+                badge.textContent = 'NEW';
+                badge.title = 'This location has been updated since your last visit';
+                header.appendChild(badge);
+            }
+        }
+        
+        function clearUpdateNotifications() {
+            document.querySelectorAll('.update-badge').forEach(badge => {
+                badge.remove();
+            });
+        }
+        
         function toggleFavorite(button) {
             const card = button.closest('.location-card');
             const locationName = card.getAttribute('data-location-name');
@@ -7264,6 +7375,13 @@
         // Initialize favorites when page loads
         document.addEventListener('DOMContentLoaded', function() {
             initializeFavorites();
+            checkForUpdates();
+            
+            // Save visit time when user leaves the page
+            window.addEventListener('beforeunload', function() {
+                saveLastVisit();
+                clearUpdateNotifications();
+            });
         });
     </script>
 </body>

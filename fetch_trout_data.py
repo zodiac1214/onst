@@ -1392,6 +1392,13 @@ class TroutDataFetcher:
         // Initialize favorites when page loads
         document.addEventListener('DOMContentLoaded', function() {{
             initializeFavorites();
+            checkForUpdates();
+            
+            // Save visit time when user leaves the page
+            window.addEventListener('beforeunload', function() {{
+                saveLastVisit();
+                clearUpdateNotifications();
+            }});
         }});
     </script>
 </body>
