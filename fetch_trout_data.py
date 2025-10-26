@@ -53,36 +53,30 @@ class TroutDataFetcher:
             attributes = feature.get('attributes', {})
             geometry = feature.get('geometry', {})
             
-            # Extract relevant information
+            # Extract relevant information using correct field names
+            waterbody_name = (attributes.get('Official_Waterbody_Name') or 
+                            attributes.get('Unoffcial_Waterbody_Name') or 
+                            'Unknown Waterbody')
+            
             processed_feature = {
-                'location_name': attributes.get('WaterbodyName', 'Unknown'),
-                'county': attributes.get('County', 'Unknown'),
+                'location_name': waterbody_name,
+                'district': attributes.get('MNRF_District', 'Unknown District'),
                 'species': attributes.get('Species', 'Rainbow Trout'),
                 'stocking_year': attributes.get('Stocking_Year', 'Unknown'),
-                'stocking_date': attributes.get('Stocking_Date', 'Unknown'),
+                'stocking_date': f"{attributes.get('Stocking_Year', 'Unknown')}",  # Only year available
                 'number_stocked': attributes.get('Number_of_Fish_Stocked', 0),
-                'fish_size': attributes.get('Fish_Size_Inches', 'Unknown'),
-                'latitude': geometry.get('y', attributes.get('Latitude', 0)),
-                'longitude': geometry.get('x', attributes.get('Longitude', 0)),
-                'waterbody_type': attributes.get('WaterbodyType', 'Unknown'),
-                'stocking_method': attributes.get('StockingMethod', 'Unknown')
+                'developmental_stage': attributes.get('Developmental_Stage', 'Unknown'),
+                'latitude': attributes.get('Latitude', 0),
+                'longitude': attributes.get('Longitude', 0),
+                'waterbody_id': attributes.get('Waterbody_Location_Identifier', 'Unknown'),
+                'geographic_township': attributes.get('Geographic_Township', 'Unknown')
             }
-            
-            # Convert timestamp to readable date if needed
-            if isinstance(processed_feature['stocking_date'], (int, float)):
-                try:
-                    processed_feature['stocking_date'] = datetime.fromtimestamp(
-                        processed_feature['stocking_date'] / 1000
-                    ).strftime('%Y-%m-%d')
-                except (ValueError, OSError):
-                    processed_feature['stocking_date'] = 'Unknown'
             
             processed_features.append(processed_feature)
         
-        # Sort by stocking date (most recent first)
+        # Sort by district and then by waterbody name
         processed_features.sort(
-            key=lambda x: x['stocking_date'] if x['stocking_date'] != 'Unknown' else '0000-00-00',
-            reverse=True
+            key=lambda x: (x['district'], x['location_name'])
         )
         
         return processed_features
@@ -94,8 +88,8 @@ class TroutDataFetcher:
         # Calculate summary statistics
         total_locations = len(features)
         total_fish = sum(f['number_stocked'] for f in features if isinstance(f['number_stocked'], (int, float)))
-        counties = set(f['county'] for f in features if f['county'] and f['county'] != 'Unknown' and f['county'].strip())
-        unique_counties = len(counties)
+        districts = set(f['district'] for f in features if f['district'] and f['district'] != 'Unknown District' and f['district'].strip())
+        unique_districts = len(districts)
         
         html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -308,13 +302,13 @@ class TroutDataFetcher:
                 <div class="stat-label">Fish Stocked</div>
             </div>
             <div class="stat-card">
-                <span class="stat-number">{unique_counties}</span>
-                <div class="stat-label">Counties</div>
+                <span class="stat-number">{unique_districts}</span>
+                <div class="stat-label">Districts</div>
             </div>
         </div>
         
         <div class="search-box">
-            <input type="text" class="search-input" id="searchInput" placeholder="Search by location, county, or waterbody type...">
+            <input type="text" class="search-input" id="searchInput" placeholder="Search by waterbody name, district, or development stage...">
         </div>
         
         <div class="locations-grid" id="locationsGrid">
@@ -329,10 +323,10 @@ class TroutDataFetcher:
                 fish_display = str(fish_count)
             
             html_content += f"""
-            <div class="location-card" data-search="{feature['location_name'].lower()} {feature['county'].lower()} {feature['waterbody_type'].lower()}">
+            <div class="location-card" data-search="{feature['location_name'].lower()} {feature['district'].lower()} {feature['developmental_stage'].lower()}">
                 <div class="card-header">
                     <div class="location-name">{feature['location_name']}</div>
-                    <div class="county">{feature['county']} County</div>
+                    <div class="county">{feature['district']}</div>
                 </div>
                 <div class="card-body">
                     <div class="detail-row">
@@ -340,20 +334,20 @@ class TroutDataFetcher:
                         <span class="detail-value fish-count">{fish_display}</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">Stocking Date:</span>
-                        <span class="detail-value">{feature['stocking_date']}</span>
+                        <span class="detail-label">Stocking Year:</span>
+                        <span class="detail-value">{feature['stocking_year']}</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">Fish Size:</span>
-                        <span class="detail-value">{feature['fish_size']}</span>
+                        <span class="detail-label">Development Stage:</span>
+                        <span class="detail-value">{feature['developmental_stage']}</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">Waterbody Type:</span>
-                        <span class="detail-value">{feature['waterbody_type']}</span>
+                        <span class="detail-label">Waterbody ID:</span>
+                        <span class="detail-value">{feature['waterbody_id']}</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-label">Stocking Method:</span>
-                        <span class="detail-value">{feature['stocking_method']}</span>
+                        <span class="detail-label">Geographic Township:</span>
+                        <span class="detail-value">{feature['geographic_township']}</span>
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">Coordinates:</span>
