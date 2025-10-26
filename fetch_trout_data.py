@@ -74,10 +74,11 @@ class TroutDataFetcher:
             
             raw_features.append(raw_feature)
         
-        # Group by unique location (waterbody_name + district)
+        # Group by unique waterbody ID (more reliable than name + district)
         location_groups = {}
         for feature in raw_features:
-            location_key = f"{feature['location_name']}_{feature['district']}"
+            # Use waterbody_id as primary key, fallback to location_name + district if ID is missing
+            location_key = feature['waterbody_id'] if feature['waterbody_id'] != 'Unknown' else f"{feature['location_name']}_{feature['district']}"
             if location_key not in location_groups:
                 location_groups[location_key] = []
             location_groups[location_key].append(feature)
