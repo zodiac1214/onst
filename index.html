@@ -267,11 +267,13 @@
             font-size: 1.2rem;
             font-weight: bold;
             margin-bottom: 0.25rem;
+            padding-left: 45px;
         }
         
         .district {
             font-size: 0.9rem;
             opacity: 0.9;
+            padding-left: 45px;
         }
         
         .year-badge {
@@ -350,7 +352,7 @@
         .star-button {
             position: absolute;
             top: 10px;
-            right: 10px;
+            left: 10px;
             background: rgba(255, 255, 255, 0.9);
             border: none;
             border-radius: 50%;
@@ -377,6 +379,18 @@
         
         .star-button.starred:hover {
             background: #e0a800;
+        }
+        
+        /* Starred button on previous-year cards - use darker gold for visibility */
+        .location-card.previous-year .star-button.starred {
+            background: #b8860b;
+            color: white;
+            border: 2px solid #8b6914;
+        }
+        
+        .location-card.previous-year .star-button.starred:hover {
+            background: #8b6914;
+            border-color: #654321;
         }
         
         /* Favorite Section Styles */
@@ -407,11 +421,63 @@
             padding: 2rem;
         }
         
+        /* Starred Section Styles */
+        .starred-section {
+            margin-bottom: 2rem;
+        }
+        
+        .starred-header {
+            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+            color: #333;
+            padding: 1rem;
+            border-radius: 8px 8px 0 0;
+            font-weight: bold;
+            margin-bottom: 0;
+        }
+        
+        .starred-header h2 {
+            margin: 0;
+            font-size: 1.3rem;
+        }
+        
+        .starred-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1rem;
+            padding: 1rem;
+            background: #fff9e6;
+            border: 2px solid #ffc107;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+        }
+        
+        /* Section Headers */
+        .section-header {
+            background: linear-gradient(135deg, #28a745 0%, #20a144 100%);
+            color: white;
+            padding: 1rem;
+            border-radius: 8px 8px 0 0;
+            margin-bottom: 0;
+            margin-top: 1rem;
+        }
+        
+        .section-header h2 {
+            margin: 0;
+            font-size: 1.3rem;
+        }
+        
+        .all-locations-section .locations-grid {
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            border: 2px solid #28a745;
+            padding: 1rem;
+        }
+        
         /* Update Notification Badge */
         .update-badge {
             position: absolute;
             top: 5px;
-            left: 10px;
+            left: 50px;
             background: #dc3545;
             color: white;
             font-size: 10px;
@@ -728,7 +794,22 @@
             <div class="results-info" id="resultsInfo">Showing all 150 locations</div>
         </div>
         
-        <div class="locations-grid" id="locationsGrid">
+        <!-- Starred Locations Section -->
+        <div class="starred-section" id="starredSection" style="display: none;">
+            <div class="starred-header">
+                <h2>⭐ Your Starred Locations</h2>
+            </div>
+            <div class="starred-grid" id="starredGrid">
+                <!-- Starred locations will be populated here by JavaScript -->
+            </div>
+        </div>
+        
+        <!-- All Locations Section -->
+        <div class="all-locations-section">
+            <div class="section-header" id="allLocationsHeader">
+                <h2>🎣 All Locations</h2>
+            </div>
+            <div class="locations-grid" id="locationsGrid">
 
             <div class="location-card current-year" 
                  data-search="wolfe lake" 
@@ -6883,7 +6964,7 @@
         </div>
         
         <div class="last-updated">
-            Last updated: October 26, 2025 at 06:05 PM
+            Last updated: October 26, 2025 at 02:19 PM
         </div>
     </div>
     
@@ -7001,6 +7082,9 @@
                 badge.textContent = 'NEW';
                 badge.title = 'This location has been updated since your last visit';
                 header.appendChild(badge);
+                
+                // Show push notification if permission granted
+                showPushNotification(locationName, 'Updated stocking data');
             }
         }
         
@@ -7037,28 +7121,54 @@
         
         function sortLocationsByFavorites() {
             const container = document.querySelector('.locations-grid');
+            const starredContainer = document.querySelector('.starred-grid');
+            const starredSection = document.querySelector('.starred-section');
             const cards = Array.from(container.querySelectorAll('.location-card'));
             const favorites = getFavorites();
             
-            cards.sort((a, b) => {
-                const aName = a.getAttribute('data-location-name');
-                const aDistrict = a.getAttribute('data-location-district');
-                const bName = b.getAttribute('data-location-name');
-                const bDistrict = b.getAttribute('data-location-district');
+            // Clear starred section
+            starredContainer.innerHTML = '';
+            
+            // Separate starred and non-starred cards
+            const starredCards = [];
+            const regularCards = [];
+            
+            cards.forEach(card => {
+                const locationName = card.getAttribute('data-location-name');
+                const district = card.getAttribute('data-location-district');
+                const locationKey = `${locationName}-${district}`;
                 
-                const aKey = `${aName}-${aDistrict}`;
-                const bKey = `${bName}-${bDistrict}`;
-                
-                const aIsFav = favorites.includes(aKey);
-                const bIsFav = favorites.includes(bKey);
-                
-                if (aIsFav && !bIsFav) return -1;
-                if (!aIsFav && bIsFav) return 1;
-                return 0;
+                if (favorites.includes(locationKey)) {
+                    // Clone card for starred section
+                    const clonedCard = card.cloneNode(true);
+                    starredCards.push(clonedCard);
+                } else {
+                    regularCards.push(card);
+                }
             });
             
-            // Re-append cards in sorted order
-            cards.forEach(card => container.appendChild(card));
+            // Show/hide starred section based on whether there are favorites
+            if (starredCards.length > 0) {
+                starredSection.style.display = 'block';
+                starredCards.forEach(card => {
+                    starredContainer.appendChild(card);
+                    // Reattach event listeners for cloned cards
+                    const starButton = card.querySelector('.star-button');
+                    const mapButton = card.querySelector('.map-button');
+                    if (starButton) {
+                        starButton.onclick = function() { toggleFavorite(this); };
+                    }
+                    if (mapButton) {
+                        mapButton.onclick = function() { showLocationMapFromCard(this); };
+                    }
+                });
+            } else {
+                starredSection.style.display = 'none';
+            }
+            
+            // Clear and repopulate main grid with non-starred cards
+            container.innerHTML = '';
+            regularCards.forEach(card => container.appendChild(card));
         }
         
         function initializeFavorites() {
@@ -7376,6 +7486,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             initializeFavorites();
             checkForUpdates();
+            initializePushNotifications();
             
             // Save visit time when user leaves the page
             window.addEventListener('beforeunload', function() {
@@ -7383,6 +7494,47 @@
                 clearUpdateNotifications();
             });
         });
+        
+        // Push notification functionality
+        function initializePushNotifications() {
+            // Check if browser supports notifications
+            if ('Notification' in window) {
+                // Request permission for notifications
+                if (Notification.permission === 'default') {
+                    const favorites = getFavorites();
+                    if (favorites.length > 0) {
+                        Notification.requestPermission().then(permission => {
+                            if (permission === 'granted') {
+                                console.log('Notification permission granted');
+                            }
+                        });
+                    }
+                }
+            }
+        }
+        
+        function showPushNotification(locationName, updateType) {
+            if (Notification.permission === 'granted') {
+                const notification = new Notification('Trout Stocking Update', {
+                    body: `${locationName} has new stocking data (${updateType})`,
+                    icon: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzIiIGN5PSIzMiIgcj0iMzIiIGZpbGw9IiMyOGE3NDUiLz4KPHN2ZyB4PSIxNiIgeT0iMTYiIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJ3aGl0ZSI+CjxwYXRoIGQ9Ik0xMiAyYzUuNTIzIDAgMTAgNC40NzcgMTAgMTBzLTQuNDc3IDEwLTEwIDEwUzIgMTcuNTIzIDIgMTJTNi40NzcgMiAxMiAyeiIvPgo8L3N2Zz4KPC9zdmc+',
+                    tag: 'trout-update',
+                    requireInteraction: false,
+                    silent: false
+                });
+                
+                // Auto-close notification after 5 seconds
+                setTimeout(() => {
+                    notification.close();
+                }, 5000);
+                
+                // Handle notification click
+                notification.onclick = function() {
+                    window.focus();
+                    notification.close();
+                };
+            }
+        }
     </script>
 </body>
 </html>
