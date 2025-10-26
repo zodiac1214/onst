@@ -189,6 +189,30 @@ class TroutDataFetcher:
             margin-bottom: 2rem;
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: relative;
+        }}
+        
+        .header-donation {{
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: #ffc107;
+            color: #333;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }}
+        
+        .header-donation:hover {{
+            background: #e0a800;
+            transform: translateY(-1px);
+            box-shadow: 0 3px 6px rgba(0,0,0,0.3);
         }}
         
         h1 {{
@@ -740,6 +764,40 @@ class TroutDataFetcher:
             font-style: italic;
         }}
         
+        .donation-section {{
+            text-align: center;
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, #28a745 0%, #20a144 100%);
+            border-radius: 8px;
+            color: white;
+        }}
+        
+        .donation-text {{
+            margin-bottom: 1rem;
+            font-size: 1rem;
+        }}
+        
+        .donation-button {{
+            background: #ffc107;
+            color: #333;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: bold;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }}
+        
+        .donation-button:hover {{
+            background: #e0a800;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }}
+        
         @media (max-width: 768px) {{
             .container {{
                 padding: 10px;
@@ -747,6 +805,15 @@ class TroutDataFetcher:
             
             h1 {{
                 font-size: 2rem;
+            }}
+            
+            .header-donation {{
+                position: static;
+                margin-bottom: 1rem;
+                display: block;
+                width: fit-content;
+                margin-left: auto;
+                margin-right: auto;
             }}
             
             .locations-grid {{
@@ -767,6 +834,11 @@ class TroutDataFetcher:
 <body>
     <div class="container">
         <header>
+            <a href="https://www.paypal.com/donate/?business=DSLQSPRCKJMAW&amount=5&no_recurring=1&currency_code=CAD" 
+               target="_blank" 
+               class="header-donation">
+                ☕ Buy me a lure
+            </a>
             <h1>🐟 Rainbow Trout Stocking Locations</h1>
             <p class="subtitle">2020-2025 Stocking Data for Recreational Fishing</p>
         </header>
