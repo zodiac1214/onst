@@ -399,6 +399,22 @@ class TroutDataFetcher:
             position: relative;
         }}
         
+        /* Current year (2025) - Green */
+        .location-card.current-year .card-header {{
+            background: linear-gradient(135deg, #28a745 0%, #20a144 100%);
+        }}
+        
+        /* Previous years - Yellow */
+        .location-card.previous-year .card-header {{
+            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+            color: #333;
+        }}
+        
+        .location-card.previous-year .year-badge {{
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+        }}
+        
         .location-name {{
             font-size: 1.2rem;
             font-weight: bold;
@@ -480,6 +496,88 @@ class TroutDataFetcher:
         
         .map-button:hover {{
             background: #138496;
+        }}
+        
+        /* Star/Favorite Button Styles */
+        .star-button {{
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 50%;
+            width: 35px;
+            height: 35px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.2s;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        
+        .star-button:hover {{
+            background: rgba(255, 255, 255, 1);
+            transform: scale(1.1);
+        }}
+        
+        .star-button.starred {{
+            background: #ffc107;
+            color: white;
+        }}
+        
+        .star-button.starred:hover {{
+            background: #e0a800;
+        }}
+        
+        /* Favorite Section Styles */
+        .favorites-section {{
+            margin-bottom: 2rem;
+        }}
+        
+        .favorites-header {{
+            background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+            color: #333;
+            padding: 1rem;
+            border-radius: 8px 8px 0 0;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }}
+        
+        .favorites-container {{
+            border: 2px solid #ffc107;
+            border-radius: 0 0 8px 8px;
+            padding: 1rem;
+            background: #fff9e6;
+        }}
+        
+        .no-favorites {{
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 2rem;
+        }}
+        
+        /* Update Notification Badge */
+        .update-badge {{
+            position: absolute;
+            top: 5px;
+            left: 10px;
+            background: #dc3545;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 10px;
+            z-index: 15;
+            animation: pulse 2s infinite;
+        }}
+        
+        @keyframes pulse {{
+            0% {{ opacity: 1; }}
+            50% {{ opacity: 0.7; }}
+            100% {{ opacity: 1; }}
         }}
         
         /* Modal Styles */
@@ -751,14 +849,21 @@ class TroutDataFetcher:
                 location_data_attrs.append(f'{attr_name}="{attr_value}"')
             location_data_attrs_str = ' '.join(location_data_attrs)
             
+            # Determine year class for styling
+            current_year = 2025
+            year_class = "current-year" if feature['stocking_year'] == current_year else "previous-year"
+            
             html_content += f"""
-            <div class="location-card" 
+            <div class="location-card {year_class}" 
                  data-search="{feature['location_name'].lower()}" 
                  data-year="{feature['stocking_year']}"
                  data-stage="{feature['developmental_stage']}"
                  data-district="{feature['district']}"
                  {location_data_attrs_str}>
                 <div class="card-header">
+                    <button class="star-button" onclick="toggleFavorite(this)" title="Add to favorites">
+                        ⭐
+                    </button>
                     <div class="location-name">{feature['location_name']}</div>
                     <div class="district">{feature['district'].replace(' District', '')}</div>
                     <div class="year-badge">{feature['stocking_year']}</div>
@@ -821,6 +926,176 @@ class TroutDataFetcher:
     <script>
         let map = null;
         let currentMarker = null;
+        
+        // Favorites management
+        function getFavorites() {{
+            const favorites = localStorage.getItem('trout-favorites');
+            return favorites ? JSON.parse(favorites) : [];
+        }}
+        
+        function saveFavorites(favorites) {{
+            localStorage.setItem('trout-favorites', JSON.stringify(favorites));
+        }}
+        
+        function getLastVisit() {{
+            const lastVisit = localStorage.getItem('trout-last-visit');
+            return lastVisit ? new Date(lastVisit) : new Date(0);
+        }}
+        
+        function saveLastVisit() {{
+            localStorage.setItem('trout-last-visit', new Date().toISOString());
+        }}
+        
+        function getFavoriteData() {{
+            const data = localStorage.getItem('trout-favorite-data');
+            return data ? JSON.parse(data) : {{}};
+        }}
+        
+        function saveFavoriteData(data) {{
+            localStorage.setItem('trout-favorite-data', JSON.stringify(data));
+        }}
+        
+        function checkForUpdates() {{
+            const favorites = getFavorites();
+            const lastVisit = getLastVisit();
+            const storedData = getFavoriteData();
+            const currentData = {{}};
+            
+            let hasUpdates = false;
+            
+            // Collect current data for all favorite locations
+            favorites.forEach(locationKey => {{
+                const card = document.querySelector(`[data-location-name][data-location-district]`);
+                if (card) {{
+                    const cards = document.querySelectorAll('.location-card');
+                    for (const c of cards) {{
+                        const name = c.getAttribute('data-location-name');
+                        const district = c.getAttribute('data-location-district');
+                        const key = `${{name}}-${{district}}`;
+                        
+                        if (key === locationKey) {{
+                            const fishCount = c.getAttribute('data-location-fish-count');
+                            const totalFish = c.getAttribute('data-location-total-fish');
+                            const year = c.getAttribute('data-location-year');
+                            
+                            currentData[key] = {{
+                                fishCount: parseInt(fishCount),
+                                totalFish: parseInt(totalFish),
+                                year: parseInt(year),
+                                lastUpdated: new Date().toISOString()
+                            }};
+                            
+                            // Check if data has changed since last visit
+                            const stored = storedData[key];
+                            if (stored && (
+                                stored.fishCount !== currentData[key].fishCount ||
+                                stored.totalFish !== currentData[key].totalFish ||
+                                stored.year !== currentData[key].year
+                            )) {{
+                                hasUpdates = true;
+                                showUpdateNotification(c, name);
+                            }}
+                            break;
+                        }}
+                    }}
+                }}
+            }});
+            
+            // Save current data
+            saveFavoriteData(currentData);
+            
+            return hasUpdates;
+        }}
+        
+        function showUpdateNotification(card, locationName) {{
+            // Add update badge to the card
+            const header = card.querySelector('.card-header');
+            let badge = header.querySelector('.update-badge');
+            
+            if (!badge) {{
+                badge = document.createElement('div');
+                badge.className = 'update-badge';
+                badge.textContent = 'NEW';
+                badge.title = 'This location has been updated since your last visit';
+                header.appendChild(badge);
+            }}
+        }}
+        
+        function clearUpdateNotifications() {{
+            document.querySelectorAll('.update-badge').forEach(badge => {{
+                badge.remove();
+            }});
+        }}
+        
+        function toggleFavorite(button) {{
+            const card = button.closest('.location-card');
+            const locationName = card.getAttribute('data-location-name');
+            const district = card.getAttribute('data-location-district');
+            const locationKey = `${{locationName}}-${{district}}`;
+            
+            let favorites = getFavorites();
+            const index = favorites.indexOf(locationKey);
+            
+            if (index === -1) {{
+                // Add to favorites
+                favorites.push(locationKey);
+                button.classList.add('starred');
+                button.title = 'Remove from favorites';
+            }} else {{
+                // Remove from favorites
+                favorites.splice(index, 1);
+                button.classList.remove('starred');
+                button.title = 'Add to favorites';
+            }}
+            
+            saveFavorites(favorites);
+            sortLocationsByFavorites();
+        }}
+        
+        function sortLocationsByFavorites() {{
+            const container = document.querySelector('.locations-grid');
+            const cards = Array.from(container.querySelectorAll('.location-card'));
+            const favorites = getFavorites();
+            
+            cards.sort((a, b) => {{
+                const aName = a.getAttribute('data-location-name');
+                const aDistrict = a.getAttribute('data-location-district');
+                const bName = b.getAttribute('data-location-name');
+                const bDistrict = b.getAttribute('data-location-district');
+                
+                const aKey = `${{aName}}-${{aDistrict}}`;
+                const bKey = `${{bName}}-${{bDistrict}}`;
+                
+                const aIsFav = favorites.includes(aKey);
+                const bIsFav = favorites.includes(bKey);
+                
+                if (aIsFav && !bIsFav) return -1;
+                if (!aIsFav && bIsFav) return 1;
+                return 0;
+            }});
+            
+            // Re-append cards in sorted order
+            cards.forEach(card => container.appendChild(card));
+        }}
+        
+        function initializeFavorites() {{
+            const favorites = getFavorites();
+            const cards = document.querySelectorAll('.location-card');
+            
+            cards.forEach(card => {{
+                const locationName = card.getAttribute('data-location-name');
+                const district = card.getAttribute('data-location-district');
+                const locationKey = `${{locationName}}-${{district}}`;
+                const button = card.querySelector('.star-button');
+                
+                if (favorites.includes(locationKey)) {{
+                    button.classList.add('starred');
+                    button.title = 'Remove from favorites';
+                }}
+            }});
+            
+            sortLocationsByFavorites();
+        }}
         
         // Multi-select functionality
         class MultiSelect {{
@@ -1112,6 +1387,11 @@ class TroutDataFetcher:
                     }}, 1000);
                 }});
             }});
+        }});
+        
+        // Initialize favorites when page loads
+        document.addEventListener('DOMContentLoaded', function() {{
+            initializeFavorites();
         }});
     </script>
 </body>
