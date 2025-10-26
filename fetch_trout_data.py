@@ -729,7 +729,7 @@ class TroutDataFetcher:
             else:
                 fish_display = str(fish_count)
             
-            # Create location data JSON for JavaScript
+            # Create location data JSON for JavaScript (escaped for HTML attributes)
             location_data = {
                 'name': feature['location_name'],
                 'district': feature['district'],
@@ -742,14 +742,22 @@ class TroutDataFetcher:
                 'waterbody_id': feature['waterbody_id'],
                 'township': feature['geographic_township']
             }
-            location_json = json.dumps(location_data)
+            
+            # Use HTML data attributes instead of inline JSON
+            location_data_attrs = []
+            for key, value in location_data.items():
+                attr_name = f'data-location-{key.replace("_", "-")}'
+                attr_value = str(value).replace('"', '&quot;').replace("'", '&#x27;')
+                location_data_attrs.append(f'{attr_name}="{attr_value}"')
+            location_data_attrs_str = ' '.join(location_data_attrs)
             
             html_content += f"""
             <div class="location-card" 
                  data-search="{feature['location_name'].lower()}" 
                  data-year="{feature['stocking_year']}"
                  data-stage="{feature['developmental_stage']}"
-                 data-district="{feature['district']}">
+                 data-district="{feature['district']}"
+                 {location_data_attrs_str}>
                 <div class="card-header">
                     <div class="location-name">{feature['location_name']}</div>
                     <div class="district">{feature['district'].replace(' District', '')}</div>
@@ -776,7 +784,7 @@ class TroutDataFetcher:
                         <span class="detail-label">Coordinates:</span>
                         <span class="detail-value coordinates" title="Click to copy">{feature['latitude']:.4f}, {feature['longitude']:.4f}</span>
                     </div>
-                    <button class="map-button" onclick="showLocationMap({location_json})">
+                    <button class="map-button" onclick="showLocationMapFromCard(this)">
                         🗺️ View on Map
                     </button>
                 </div>
@@ -982,6 +990,31 @@ class TroutDataFetcher:
         document.getElementById('searchInput').addEventListener('input', applyFilters);
         
         // Map functionality
+        function showLocationMapFromCard(button) {{
+            // Find the parent location card
+            const card = button.closest('.location-card');
+            if (!card) {{
+                console.error('Could not find location card');
+                return;
+            }}
+            
+            // Extract location data from data attributes
+            const locationData = {{
+                name: card.getAttribute('data-location-name') || 'Unknown',
+                district: card.getAttribute('data-location-district') || 'Unknown',
+                latitude: parseFloat(card.getAttribute('data-location-latitude')) || 0,
+                longitude: parseFloat(card.getAttribute('data-location-longitude')) || 0,
+                fish_count: parseInt(card.getAttribute('data-location-fish-count')) || 0,
+                total_fish: parseInt(card.getAttribute('data-location-total-fish')) || 0,
+                year: card.getAttribute('data-location-year') || 'Unknown',
+                stage: card.getAttribute('data-location-stage') || 'Unknown',
+                waterbody_id: card.getAttribute('data-location-waterbody-id') || 'Unknown',
+                township: card.getAttribute('data-location-township') || 'Unknown'
+            }};
+            
+            showLocationMap(locationData);
+        }}
+        
         function showLocationMap(locationData) {{
             document.getElementById('modalTitle').textContent = `Map: ${{locationData.name}}`;
             
