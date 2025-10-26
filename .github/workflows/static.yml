@@ -1,7 +1,11 @@
-# Simple workflow for deploying static content to GitHub Pages
-name: Deploy static content to Pages
+# Automated Rainbow Trout Stocking Data Updater and Deployer
+name: Update and Deploy Rainbow Trout Data
 
 on:
+  # Runs every hour to fetch fresh data
+  schedule:
+    - cron: '0 * * * *'  # Run at the start of every hour
+  
   # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
@@ -11,7 +15,7 @@ on:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
-  contents: read
+  contents: write  # Changed to write to allow committing updated HTML
   pages: write
   id-token: write
 
@@ -22,22 +26,82 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Single deploy job since we're just deploying
+  # Job to fetch fresh data and update HTML
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+      
+      - name: Fetch latest rainbow trout data
+        run: |
+          echo "🐟 Fetching latest rainbow trout stocking data..."
+          python3 fetch_trout_data.py
+      
+      - name: Check for changes
+        id: verify-changed-files
+        run: |
+          if git diff --quiet; then
+            echo "No changes detected in the data"
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Data changes detected"
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Commit updated HTML
+        if: steps.verify-changed-files.outputs.changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add index.html
+          git commit -m "🐟 Auto-update rainbow trout stocking data - $(date '+%Y-%m-%d %H:%M:%S UTC')"
+          git push
+      
+      - name: Upload updated files as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: updated-site
+          path: |
+            index.html
+            fetch_trout_data.py
+            README.md
+            LICENSE
+
+  # Job to deploy to GitHub Pages
   deploy:
+    needs: update-data
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: main  # Ensure we get the latest commit with updated data
+      
       - name: Setup Pages
         uses: actions/configure-pages@v5
-      - name: Upload artifact
+      
+      - name: Upload artifact to Pages
         uses: actions/upload-pages-artifact@v3
         with:
           # Upload entire repository
           path: '.'
+      
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
