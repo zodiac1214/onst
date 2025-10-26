@@ -7,6 +7,7 @@ Fetches data from ArcGIS REST API and generates a static HTML page with OpenStre
 import json
 import requests
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Any
 
 
@@ -15,7 +16,7 @@ class TroutDataFetcher:
         self.base_url = "https://services1.arcgis.com/TJH5KDher0W13Kgo/arcgis/rest/services/FishStockingDataForRecreationalPurposes/FeatureServer/0/query"
         self.params = {
             'f': 'json',
-            'where': "(Species IN ('Rainbow Trout')) AND (Stocking_Year >= 2024 AND Stocking_Year <= 2025) AND (Latitude >= 42.31 AND Latitude <= 51.63) AND (Longitude >= -94.19 AND Longitude <= -75.11) AND (Number_of_Fish_Stocked >= 4 AND Number_of_Fish_Stocked <= 508680)",
+            'where': "(Species IN ('Rainbow Trout')) AND (Stocking_Year >= 2020 AND Stocking_Year <= 2025) AND (Latitude >= 42.31 AND Latitude <= 51.63) AND (Longitude >= -94.19 AND Longitude <= -75.11) AND (Number_of_Fish_Stocked >= 4 AND Number_of_Fish_Stocked <= 508680)",
             'outFields': '*'
         }
     
@@ -155,7 +156,7 @@ class TroutDataFetcher:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rainbow Trout Stocking Locations 2024-2025</title>
+    <title>Rainbow Trout Stocking Locations 2020-2025</title>
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -767,7 +768,7 @@ class TroutDataFetcher:
     <div class="container">
         <header>
             <h1>🐟 Rainbow Trout Stocking Locations</h1>
-            <p class="subtitle">2024-2025 Stocking Data for Recreational Fishing</p>
+            <p class="subtitle">2020-2025 Stocking Data for Recreational Fishing</p>
         </header>
         
         <div class="stats">
@@ -981,7 +982,7 @@ class TroutDataFetcher:
         </div>
         
         <div class="last-updated">
-            Last updated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}
+            Last updated: {datetime.now(ZoneInfo('America/Toronto')).strftime('%B %d, %Y at %I:%M %p EST')}
         </div>
     </div>
     
