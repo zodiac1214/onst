@@ -7,19 +7,26 @@ This project fetches and displays rainbow trout stocking data from Ontario's fis
 ## Features
 
 - **Real-time Data**: Fetches the latest rainbow trout stocking data from Ontario's ArcGIS REST API
-- **Advanced Filtering**: Filter locations by:
-  - **Stocking Year** (2024, 2025)
-  - **Development Stage** (Adult, etc.)
-  - **MNRF District** (19 districts available)
+- **Advanced Multi-Select Filtering**: Filter locations by:
+  - **Stocking Year** (2024, 2025) with checkbox selection
+  - **Development Stage** (Adult, etc.) with multiple options
+  - **MNRF District** (19 districts available) with multi-select
   - **Text Search** by waterbody name
+  - **"All" option** preserved for each filter type
 - **Smart Data Grouping**: Combines multiple stocking events per location and shows:
   - Latest year's stocking count prominently
   - Total fish stocked across all years
   - Year badge indicating most recent stocking
-- **Historical Data Visualization**: 
-  - Interactive bar charts for each location's stocking history
-  - Modal popup with Chart.js graphs
-  - Detailed yearly breakdown tables
+- **Interactive OpenStreetMap Integration**: 
+  - Click "View on Map" for any location
+  - Full-screen map modal with detailed popups
+  - Precise GPS coordinates with zoom functionality
+  - Location markers with stocking information
+- **Enhanced User Experience**:
+  - Fixed filter stacking issues (filters now work independently)
+  - Multi-select dropdowns with checkbox interface
+  - Smooth modal interactions
+  - Responsive design for all devices
 - **Detailed Information**: Each location shows:
   - Number of fish stocked (latest year vs. total)
   - Stocking year
@@ -28,7 +35,7 @@ This project fetches and displays rainbow trout stocking data from Ontario's fis
   - Waterbody ID
   - Geographic coordinates (click to copy)
 - **Responsive Design**: Works perfectly on desktop, tablet, and mobile devices
-- **Interactive Features**: Search, filter, and explore data with smooth animations
+- **Interactive Features**: Multi-select filters, map integration, search, and explore data with smooth animations
 
 ## Data Source
 

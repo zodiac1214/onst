@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Rainbow Trout Stocking Data Fetcher
-Fetches data from ArcGIS REST API and generates a static HTML page
+Fetches data from ArcGIS REST API and generates a static HTML page with OpenStreetMap integration
 """
 
 import json
@@ -90,47 +90,28 @@ class TroutDataFetcher:
             # Get the most recent entry as the main record
             latest = group[0]
             
-            # Calculate historical data
-            historical_data = []
-            total_all_years = 0
-            years_data = {}
-            
-            for entry in group:
-                year = entry['stocking_year']
-                if year != 'Unknown' and isinstance(year, int):
-                    if year not in years_data:
-                        years_data[year] = 0
-                    years_data[year] += entry['number_stocked']
-                    total_all_years += entry['number_stocked']
-            
-            # Create historical data array
-            for year in sorted(years_data.keys()):
-                historical_data.append({
-                    'year': year,
-                    'fish_count': years_data[year]
-                })
-            
-            # Get latest year's count only
-            latest_year_count = years_data.get(latest['stocking_year'], latest['number_stocked'])
+            # Calculate totals
+            total_all_years = sum(entry['number_stocked'] for entry in group if isinstance(entry['number_stocked'], (int, float)))
+            latest_year_count = latest['number_stocked']
             
             # Get all unique development stages for this location
             dev_stages = list(set(entry['developmental_stage'] for entry in group if entry['developmental_stage'] != 'Unknown'))
+            years_available = list(set(entry['stocking_year'] for entry in group if isinstance(entry['stocking_year'], int)))
             
             processed_feature = {
                 'location_name': latest['location_name'],
                 'district': latest['district'],
                 'species': latest['species'],
                 'stocking_year': latest['stocking_year'],
-                'number_stocked': latest_year_count,  # Latest year only
-                'total_all_years': total_all_years,   # Total across all years
+                'number_stocked': latest_year_count,
+                'total_all_years': total_all_years,
                 'developmental_stage': latest['developmental_stage'],
                 'all_dev_stages': dev_stages,
                 'latitude': latest['latitude'],
                 'longitude': latest['longitude'],
                 'waterbody_id': latest['waterbody_id'],
                 'geographic_township': latest['geographic_township'],
-                'historical_data': historical_data,
-                'years_available': list(years_data.keys())
+                'years_available': years_available
             }
             
             processed_features.append(processed_feature)
@@ -145,7 +126,7 @@ class TroutDataFetcher:
     
     def generate_html(self, features: List[Dict[str, Any]]) -> str:
         """
-        Generate HTML page with the trout stocking data, filters, and historical charts
+        Generate HTML page with the trout stocking data, multi-select filters, and OpenStreetMap
         """
         # Calculate summary statistics
         total_locations = len(features)
@@ -175,7 +156,10 @@ class TroutDataFetcher:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Rainbow Trout Stocking Locations 2024-2025</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
     <style>
         * {{
             margin: 0;
@@ -283,17 +267,67 @@ class TroutDataFetcher:
             color: #555;
         }}
         
-        .filter-select {{
+        .multi-select {{
+            position: relative;
+            display: inline-block;
+            width: 100%;
+        }}
+        
+        .multi-select-display {{
             padding: 8px 12px;
             border: 2px solid #ddd;
             border-radius: 6px;
             font-size: 14px;
             background: white;
+            cursor: pointer;
+            min-height: 38px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }}
+        
+        .multi-select-display:focus {{
+            border-color: #2c5aa0;
             outline: none;
         }}
         
-        .filter-select:focus {{
-            border-color: #2c5aa0;
+        .multi-select-arrow {{
+            transition: transform 0.2s;
+        }}
+        
+        .multi-select-arrow.open {{
+            transform: rotate(180deg);
+        }}
+        
+        .multi-select-dropdown {{
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 2px solid #ddd;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }}
+        
+        .multi-select-option {{
+            padding: 8px 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        
+        .multi-select-option:hover {{
+            background-color: #f8f9fa;
+        }}
+        
+        .multi-select-option input[type="checkbox"] {{
+            margin: 0;
         }}
         
         .search-box {{
@@ -324,6 +358,7 @@ class TroutDataFetcher:
             cursor: pointer;
             font-size: 14px;
             transition: background 0.2s;
+            width: 100%;
         }}
         
         .clear-filters:hover {{
@@ -427,9 +462,10 @@ class TroutDataFetcher:
             background: #f8f9fa;
             padding: 0.25rem 0.5rem;
             border-radius: 4px;
+            cursor: pointer;
         }}
         
-        .history-button {{
+        .map-button {{
             background: #17a2b8;
             color: white;
             border: none;
@@ -442,7 +478,7 @@ class TroutDataFetcher:
             transition: background 0.2s;
         }}
         
-        .history-button:hover {{
+        .map-button:hover {{
             background: #138496;
         }}
         
@@ -464,7 +500,7 @@ class TroutDataFetcher:
             padding: 20px;
             border-radius: 10px;
             width: 90%;
-            max-width: 600px;
+            max-width: 800px;
             max-height: 80vh;
             overflow-y: auto;
         }}
@@ -495,28 +531,41 @@ class TroutDataFetcher:
             color: #333;
         }}
         
-        .chart-container {{
-            position: relative;
-            height: 300px;
+        #map {{
+            height: 400px;
+            width: 100%;
+            border-radius: 8px;
             margin: 20px 0;
         }}
         
-        .history-table {{
-            width: 100%;
-            border-collapse: collapse;
+        .location-info {{
             margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
         }}
         
-        .history-table th,
-        .history-table td {{
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
+        .info-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
         }}
         
-        .history-table th {{
-            background-color: #f8f9fa;
-            font-weight: bold;
+        .info-item {{
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #dee2e6;
+        }}
+        
+        .info-label {{
+            font-weight: 600;
+            color: #555;
+        }}
+        
+        .info-value {{
+            color: #333;
         }}
         
         .last-updated {{
@@ -583,41 +632,80 @@ class TroutDataFetcher:
             <div class="filters-grid">
                 <div class="filter-group">
                     <label class="filter-label">Stocking Year</label>
-                    <select class="filter-select" id="yearFilter">
-                        <option value="">All Years</option>"""
+                    <div class="multi-select" id="yearMultiSelect">
+                        <div class="multi-select-display" tabindex="0">
+                            <span class="selected-text">All Years</span>
+                            <span class="multi-select-arrow">▼</span>
+                        </div>
+                        <div class="multi-select-dropdown">
+                            <div class="multi-select-option">
+                                <input type="checkbox" value="" id="year-all" checked>
+                                <label for="year-all">All Years</label>
+                            </div>"""
         
         # Add year options
         for year in sorted(all_years, reverse=True):
-            html_content += f'<option value="{year}">{year}</option>'
+            html_content += f"""
+                            <div class="multi-select-option">
+                                <input type="checkbox" value="{year}" id="year-{year}">
+                                <label for="year-{year}">{year}</label>
+                            </div>"""
         
         html_content += """
-                    </select>
+                        </div>
+                    </div>
                 </div>
                 <div class="filter-group">
                     <label class="filter-label">Development Stage</label>
-                    <select class="filter-select" id="stageFilter">
-                        <option value="">All Stages</option>"""
+                    <div class="multi-select" id="stageMultiSelect">
+                        <div class="multi-select-display" tabindex="0">
+                            <span class="selected-text">All Stages</span>
+                            <span class="multi-select-arrow">▼</span>
+                        </div>
+                        <div class="multi-select-dropdown">
+                            <div class="multi-select-option">
+                                <input type="checkbox" value="" id="stage-all" checked>
+                                <label for="stage-all">All Stages</label>
+                            </div>"""
         
         # Add development stage options
         for stage in all_dev_stages:
-            html_content += f'<option value="{stage}">{stage}</option>'
+            html_content += f"""
+                            <div class="multi-select-option">
+                                <input type="checkbox" value="{stage}" id="stage-{stage.replace(' ', '-').lower()}">
+                                <label for="stage-{stage.replace(' ', '-').lower()}">{stage}</label>
+                            </div>"""
         
         html_content += """
-                    </select>
+                        </div>
+                    </div>
                 </div>
                 <div class="filter-group">
                     <label class="filter-label">District</label>
-                    <select class="filter-select" id="districtFilter">
-                        <option value="">All Districts</option>"""
+                    <div class="multi-select" id="districtMultiSelect">
+                        <div class="multi-select-display" tabindex="0">
+                            <span class="selected-text">All Districts</span>
+                            <span class="multi-select-arrow">▼</span>
+                        </div>
+                        <div class="multi-select-dropdown">
+                            <div class="multi-select-option">
+                                <input type="checkbox" value="" id="district-all" checked>
+                                <label for="district-all">All Districts</label>
+                            </div>"""
         
         # Add district options
-        for district in all_districts:
+        for i, district in enumerate(all_districts):
             # Shorten district names for display
             display_name = district.replace(" District", "").replace("MNRF", "").strip()
-            html_content += f'<option value="{district}">{display_name}</option>'
+            html_content += f"""
+                            <div class="multi-select-option">
+                                <input type="checkbox" value="{district}" id="district-{i}">
+                                <label for="district-{i}">{display_name}</label>
+                            </div>"""
         
         html_content += f"""
-                    </select>
+                        </div>
+                    </div>
                 </div>
                 <div class="filter-group">
                     <label class="filter-label">&nbsp;</label>
@@ -641,8 +729,20 @@ class TroutDataFetcher:
             else:
                 fish_display = str(fish_count)
             
-            # Create historical data JSON for JavaScript
-            historical_json = json.dumps(feature['historical_data'])
+            # Create location data JSON for JavaScript
+            location_data = {
+                'name': feature['location_name'],
+                'district': feature['district'],
+                'latitude': feature['latitude'],
+                'longitude': feature['longitude'],
+                'fish_count': feature['number_stocked'],
+                'total_fish': feature['total_all_years'],
+                'year': feature['stocking_year'],
+                'stage': feature['developmental_stage'],
+                'waterbody_id': feature['waterbody_id'],
+                'township': feature['geographic_township']
+            }
+            location_json = json.dumps(location_data)
             
             html_content += f"""
             <div class="location-card" 
@@ -674,10 +774,10 @@ class TroutDataFetcher:
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">Coordinates:</span>
-                        <span class="detail-value coordinates">{feature['latitude']:.4f}, {feature['longitude']:.4f}</span>
+                        <span class="detail-value coordinates" title="Click to copy">{feature['latitude']:.4f}, {feature['longitude']:.4f}</span>
                     </div>
-                    <button class="history-button" onclick="showHistory('{feature['location_name']}', {historical_json})">
-                        📊 View Stocking History ({len(feature['historical_data'])} years)
+                    <button class="map-button" onclick="showLocationMap({location_json})">
+                        🗺️ View on Map
                     </button>
                 </div>
             </div>
@@ -691,37 +791,146 @@ class TroutDataFetcher:
         </div>
     </div>
     
-    <!-- Modal for Historical Data -->
-    <div id="historyModal" class="modal">
+    <!-- Modal for Location Map -->
+    <div id="mapModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="modal-title" id="modalTitle">Stocking History</h2>
+                <h2 class="modal-title" id="modalTitle">Location Map</h2>
                 <span class="close" onclick="closeModal()">&times;</span>
             </div>
-            <div class="chart-container">
-                <canvas id="historyChart"></canvas>
+            <div id="map"></div>
+            <div class="location-info" id="locationInfo">
+                <h3>Location Details</h3>
+                <div class="info-grid" id="infoGrid">
+                </div>
             </div>
-            <table class="history-table" id="historyTable">
-                <thead>
-                    <tr>
-                        <th>Year</th>
-                        <th>Fish Stocked</th>
-                    </tr>
-                </thead>
-                <tbody id="historyTableBody">
-                </tbody>
-            </table>
         </div>
     </div>
     
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
     <script>
-        let currentChart = null;
+        let map = null;
+        let currentMarker = null;
+        
+        // Multi-select functionality
+        class MultiSelect {{
+            constructor(element) {{
+                this.element = element;
+                this.display = element.querySelector('.multi-select-display');
+                this.dropdown = element.querySelector('.multi-select-dropdown');
+                this.arrow = element.querySelector('.multi-select-arrow');
+                this.selectedText = element.querySelector('.selected-text');
+                this.checkboxes = element.querySelectorAll('input[type="checkbox"]');
+                this.allCheckbox = element.querySelector('input[value=""]');
+                
+                this.init();
+            }}
+            
+            init() {{
+                this.display.addEventListener('click', () => this.toggle());
+                this.display.addEventListener('keydown', (e) => {{
+                    if (e.key === 'Enter' || e.key === ' ') {{
+                        e.preventDefault();
+                        this.toggle();
+                    }}
+                }});
+                
+                this.checkboxes.forEach(cb => {{
+                    cb.addEventListener('change', () => this.handleChange(cb));
+                }});
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', (e) => {{
+                    if (!this.element.contains(e.target)) {{
+                        this.close();
+                    }}
+                }});
+            }}
+            
+            toggle() {{
+                const isOpen = this.dropdown.style.display === 'block';
+                if (isOpen) {{
+                    this.close();
+                }} else {{
+                    this.open();
+                }}
+            }}
+            
+            open() {{
+                this.dropdown.style.display = 'block';
+                this.arrow.classList.add('open');
+            }}
+            
+            close() {{
+                this.dropdown.style.display = 'none';
+                this.arrow.classList.remove('open');
+            }}
+            
+            handleChange(changedCheckbox) {{
+                if (changedCheckbox === this.allCheckbox) {{
+                    // If "All" is checked, uncheck others
+                    if (changedCheckbox.checked) {{
+                        this.checkboxes.forEach(cb => {{
+                            if (cb !== this.allCheckbox) {{
+                                cb.checked = false;
+                            }}
+                        }});
+                    }}
+                }} else {{
+                    // If any specific option is checked, uncheck "All"
+                    if (changedCheckbox.checked) {{
+                        this.allCheckbox.checked = false;
+                    }}
+                    
+                    // If no specific options are checked, check "All"
+                    const specificChecked = Array.from(this.checkboxes).some(cb => 
+                        cb !== this.allCheckbox && cb.checked
+                    );
+                    if (!specificChecked) {{
+                        this.allCheckbox.checked = true;
+                    }}
+                }}
+                
+                this.updateDisplay();
+                applyFilters();
+            }}
+            
+            updateDisplay() {{
+                const selected = Array.from(this.checkboxes)
+                    .filter(cb => cb.checked && cb !== this.allCheckbox)
+                    .map(cb => cb.nextElementSibling.textContent);
+                
+                if (selected.length === 0 || this.allCheckbox.checked) {{
+                    this.selectedText.textContent = this.allCheckbox.nextElementSibling.textContent;
+                }} else if (selected.length === 1) {{
+                    this.selectedText.textContent = selected[0];
+                }} else {{
+                    this.selectedText.textContent = `${{selected.length}} selected`;
+                }}
+            }}
+            
+            getSelectedValues() {{
+                if (this.allCheckbox.checked) {{
+                    return [];
+                }}
+                return Array.from(this.checkboxes)
+                    .filter(cb => cb.checked && cb !== this.allCheckbox)
+                    .map(cb => cb.value);
+            }}
+        }}
+        
+        // Initialize multi-selects
+        const yearMultiSelect = new MultiSelect(document.getElementById('yearMultiSelect'));
+        const stageMultiSelect = new MultiSelect(document.getElementById('stageMultiSelect'));
+        const districtMultiSelect = new MultiSelect(document.getElementById('districtMultiSelect'));
         
         // Filter functionality
         function applyFilters() {{
-            const yearFilter = document.getElementById('yearFilter').value;
-            const stageFilter = document.getElementById('stageFilter').value;
-            const districtFilter = document.getElementById('districtFilter').value;
+            const selectedYears = yearMultiSelect.getSelectedValues();
+            const selectedStages = stageMultiSelect.getSelectedValues();
+            const selectedDistricts = districtMultiSelect.getSelectedValues();
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             
             const cards = document.querySelectorAll('.location-card');
@@ -733,9 +942,9 @@ class TroutDataFetcher:
                 const cardDistrict = card.getAttribute('data-district');
                 const searchData = card.getAttribute('data-search');
                 
-                const yearMatch = !yearFilter || cardYear === yearFilter;
-                const stageMatch = !stageFilter || cardStage === stageFilter;
-                const districtMatch = !districtFilter || cardDistrict === districtFilter;
+                const yearMatch = selectedYears.length === 0 || selectedYears.includes(cardYear);
+                const stageMatch = selectedStages.length === 0 || selectedStages.includes(cardStage);
+                const districtMatch = selectedDistricts.length === 0 || selectedDistricts.includes(cardDistrict);
                 const searchMatch = !searchTerm || searchData.includes(searchTerm);
                 
                 if (yearMatch && stageMatch && districtMatch && searchMatch) {{
@@ -751,101 +960,109 @@ class TroutDataFetcher:
         }}
         
         function clearAllFilters() {{
-            document.getElementById('yearFilter').value = '';
-            document.getElementById('stageFilter').value = '';
-            document.getElementById('districtFilter').value = '';
+            // Reset all multi-selects
+            [yearMultiSelect, stageMultiSelect, districtMultiSelect].forEach(ms => {{
+                ms.checkboxes.forEach(cb => {{
+                    if (cb.value === '') {{
+                        cb.checked = true;
+                    }} else {{
+                        cb.checked = false;
+                    }}
+                }});
+                ms.updateDisplay();
+            }});
+            
+            // Clear search
             document.getElementById('searchInput').value = '';
+            
             applyFilters();
         }}
         
-        // Event listeners for filters
-        document.getElementById('yearFilter').addEventListener('change', applyFilters);
-        document.getElementById('stageFilter').addEventListener('change', applyFilters);
-        document.getElementById('districtFilter').addEventListener('change', applyFilters);
+        // Search input listener
         document.getElementById('searchInput').addEventListener('input', applyFilters);
         
-        // Modal functionality
-        function showHistory(locationName, historicalData) {{
-            document.getElementById('modalTitle').textContent = `Stocking History: ${{locationName}}`;
+        // Map functionality
+        function showLocationMap(locationData) {{
+            document.getElementById('modalTitle').textContent = `Map: ${{locationData.name}}`;
             
-            // Clear previous chart
-            if (currentChart) {{
-                currentChart.destroy();
+            // Initialize map if not already done
+            if (!map) {{
+                map = L.map('map');
+                L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png', {{
+                    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                }}).addTo(map);
             }}
             
-            // Prepare data for chart
-            const years = historicalData.map(d => d.year);
-            const fishCounts = historicalData.map(d => d.fish_count);
+            // Remove existing marker
+            if (currentMarker) {{
+                map.removeLayer(currentMarker);
+            }}
             
-            // Create chart
-            const ctx = document.getElementById('historyChart').getContext('2d');
-            currentChart = new Chart(ctx, {{
-                type: 'bar',
-                data: {{
-                    labels: years,
-                    datasets: [{{
-                        label: 'Fish Stocked',
-                        data: fishCounts,
-                        backgroundColor: '#28a745',
-                        borderColor: '#20a144',
-                        borderWidth: 1
-                    }}]
-                }},
-                options: {{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {{
-                        y: {{
-                            beginAtZero: true,
-                            title: {{
-                                display: true,
-                                text: 'Number of Fish'
-                            }}
-                        }},
-                        x: {{
-                            title: {{
-                                display: true,
-                                text: 'Year'
-                            }}
-                        }}
-                    }},
-                    plugins: {{
-                        legend: {{
-                            display: false
-                        }},
-                        title: {{
-                            display: true,
-                            text: 'Annual Stocking Data'
-                        }}
-                    }}
-                }}
-            }});
+            // Add new marker
+            currentMarker = L.marker([locationData.latitude, locationData.longitude])
+                .addTo(map)
+                .bindPopup(`<b>${{locationData.name}}</b><br>
+                           Fish Stocked (${{locationData.year}}): ${{locationData.fish_count.toLocaleString()}}<br>
+                           District: ${{locationData.district}}`);
             
-            // Populate table
-            const tableBody = document.getElementById('historyTableBody');
-            tableBody.innerHTML = '';
+            // Set map view
+            map.setView([locationData.latitude, locationData.longitude], 13);
             
-            historicalData.forEach(entry => {{
-                const row = tableBody.insertRow();
-                row.insertCell(0).textContent = entry.year;
-                row.insertCell(1).textContent = entry.fish_count.toLocaleString();
-            }});
+            // Update location info
+            const infoGrid = document.getElementById('infoGrid');
+            infoGrid.innerHTML = `
+                <div class="info-item">
+                    <span class="info-label">Location:</span>
+                    <span class="info-value">${{locationData.name}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">District:</span>
+                    <span class="info-value">${{locationData.district}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Fish Stocked (${{locationData.year}}):</span>
+                    <span class="info-value">${{locationData.fish_count.toLocaleString()}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Total All Years:</span>
+                    <span class="info-value">${{locationData.total_fish.toLocaleString()}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Development Stage:</span>
+                    <span class="info-value">${{locationData.stage}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Coordinates:</span>
+                    <span class="info-value">${{locationData.latitude.toFixed(4)}}, ${{locationData.longitude.toFixed(4)}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Waterbody ID:</span>
+                    <span class="info-value">${{locationData.waterbody_id}}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Township:</span>
+                    <span class="info-value">${{locationData.township}}</span>
+                </div>
+            `;
             
             // Show modal
-            document.getElementById('historyModal').style.display = 'block';
+            document.getElementById('mapModal').style.display = 'block';
+            
+            // Invalidate size after showing modal to fix map display
+            setTimeout(() => {{
+                if (map) {{
+                    map.invalidateSize();
+                }}
+            }}, 100);
         }}
         
         function closeModal() {{
-            document.getElementById('historyModal').style.display = 'none';
-            if (currentChart) {{
-                currentChart.destroy();
-                currentChart = null;
-            }}
+            document.getElementById('mapModal').style.display = 'none';
         }}
         
         // Close modal when clicking outside
         window.onclick = function(event) {{
-            const modal = document.getElementById('historyModal');
+            const modal = document.getElementById('mapModal');
             if (event.target === modal) {{
                 closeModal();
             }}
@@ -853,8 +1070,6 @@ class TroutDataFetcher:
         
         // Add click to copy coordinates
         document.querySelectorAll('.coordinates').forEach(coord => {{
-            coord.style.cursor = 'pointer';
-            coord.title = 'Click to copy coordinates';
             coord.addEventListener('click', function() {{
                 navigator.clipboard.writeText(this.textContent).then(() => {{
                     const original = this.textContent;
@@ -905,6 +1120,12 @@ class TroutDataFetcher:
             self.save_html(html_content)
             
             print(f"\\nSuccess! Generated static page with {len(processed_features)} rainbow trout stocking locations.")
+            print("Features added:")
+            print("✅ Multi-select dropdown filters with checkboxes")
+            print("✅ Fixed filter stacking issues")
+            print("✅ Removed historical charts")
+            print("✅ Added OpenStreetMap integration")
+            print("✅ Interactive location maps with detailed popups")
             print("Open 'index.html' in your browser to view the results.")
             
         except Exception as e:
