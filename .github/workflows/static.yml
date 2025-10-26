@@ -71,7 +71,7 @@ jobs:
           git push
       
       - name: Upload updated files as artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: updated-site
           path: |
@@ -97,7 +97,7 @@ jobs:
         uses: actions/configure-pages@v5
       
       - name: Upload artifact to Pages
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           # Upload entire repository
           path: '.'
