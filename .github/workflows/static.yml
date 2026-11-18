@@ -3,8 +3,8 @@ name: Update and Deploy Rainbow Trout Data
 
 on:
   # Runs every hour to fetch fresh data
-  schedule:
-    - cron: '0 * * * *'  # Run at the start of every hour
+  # schedule:
+    # - cron: '0 * * * *'  # Run at the start of every hour
   
   # Runs on pushes targeting the default branch
   push:
